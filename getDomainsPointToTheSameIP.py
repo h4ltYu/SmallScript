@@ -3,10 +3,11 @@ import queue
 import requests
 from publicdns.client import PublicDNS
 
-APIKEY=["<List virustotal apikey come here>"]
+APIKEY=["<List virustotal apikey come here>","APIKEY2"]
+
 MaxReqPerMin = 4
 NumOfAPIKey = len(APIKEY)
-TimeToSleep = NumOfAPIKey*MaxReqPerMin
+TimeToSleep = 60/(NumOfAPIKey*MaxReqPerMin)
 domainQueue = queue.Queue()
 ipQueue = queue.Queue()
 domainSet = set()
@@ -17,6 +18,7 @@ originIp = set()
 def lookup():
     global ID
     global domainQueue
+    global ipQueue
     while not domainQueue.empty():
         domain = domainQueue.get()
         print("processing domain: %s" %(domain))
@@ -29,26 +31,28 @@ def lookup():
         for ip in ips:
             if(ip in ID):
                 ID[ip].add((domain))
-            ID[ip] = set((domain))
-            ipQueue.put(ip)
+            else:
+                ID[ip] = set((domain))
+                ipQueue.put(ip)
 
 def reverseLookup():
     global domainSet
-    count = 0
     global ipQueue
+    count = 0
+    url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
     while not ipQueue.empty():
         ip = ipQueue.get()
-        time.sleep(60/TimeToSleep)
         print("Processing ip %s" %(ip))
-        url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
         params = {'apikey':APIKEY[count],'ip':ip}
         count = (count + 1) % NumOfAPIKey
         response = requests.get(url, params=params)
         if(response.json()['response_code'] ==0):
             continue
         for domain in response.json()['resolutions']:
-            domainQueue.put(domain['hostname'])
-            domainSet.add(domain['hostname'])
+            if domain['hostname'] not in domainSet:
+                domainQueue.put(domain['hostname'])
+                domainSet.add(domain['hostname'])
+        time.sleep(TimeToSleep)
 
 def loadDomain():
     global domainQueue
